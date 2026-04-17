@@ -1,0 +1,4 @@
+# Solution for Network Analysis
+
+In this document, I solve the tasks for *network analysis* of the course
+*Spatiotemporal Datascience*.
