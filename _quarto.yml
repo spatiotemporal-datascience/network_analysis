@@ -1,2 +1,13 @@
 project:
+  type: website
   output-dir: _docs
+
+website:
+  title: "Network Analysis"
+
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    embed-resources: true

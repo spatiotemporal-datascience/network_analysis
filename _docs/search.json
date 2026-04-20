@@ -1,0 +1,212 @@
+[
+  {
+    "objectID": "network_analysis.html",
+    "href": "network_analysis.html",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "In this task, the cycle network of Switzerland is analysed using R. The dataset comes from the Federal Roads Office FEDRO (ASTRA). The goal is to compute three different centrality measures (degree, closeness, and betweenness) for the nodes in the network and visualise the results.\n\n\n\nlibrary(sf)\nlibrary(sfnetworks)\nlibrary(tidygraph)\nlibrary(dplyr)\nlibrary(ggplot2)\nlibrary(patchwork)\nlibrary(scales)\n\n\n\n\nBoth layers are loaded as sf objects. The Veloland network is already in the Swiss national projection EPSG:2056 (CH1903+ / LV95), so no reprojection is needed. The length column already contains the edge length in metres.\n\npfad &lt;- \"C:/Users/Lejlum/network_analysis\"\n\nveloland_lines &lt;- st_read(file.path(pfad, \"veloland.gpkg\"), quiet = TRUE)\norte           &lt;- st_read(file.path(pfad, \"locations.gpkg\"), quiet = TRUE)\n\n\n\n\nThe sf line layer is converted to an undirected sfnetwork object. An undirected network is appropriate here because cycling routes can be traversed in both directions.\n\nnet &lt;- as_sfnetwork(veloland_lines, directed = FALSE)\n\n\n\n\nThe nodes are activated and three new columns are created using dplyr::mutate(). Edge length is used as the weight for closeness and betweenness, so that longer edges are treated as more costly to traverse.\n\nnet_c &lt;- net %&gt;%\n  activate(nodes) %&gt;%\n  mutate(\n    degree      = centrality_degree(),\n    closeness   = centrality_closeness(weights = length),\n    betweenness = centrality_betweenness(weights = length)\n  )\n\n\n\n\nBoth the enriched nodes and the edges are extracted as sf objects.\n\nveloland_nodes &lt;- net_c %&gt;% activate(nodes) %&gt;% st_as_sf()\nveloland_edges &lt;- net_c %&gt;% activate(edges) %&gt;% st_as_sf()\n\n\n\n\nThe centrality values are attached to the nodes. aggregate() transfers them to the edges by computing the mean over all nodes for each edge.\n\nveloland_edges_c &lt;- aggregate(veloland_nodes, veloland_edges, FUN = \"mean\")\n\n\n\n\nThe three measures have very different scales and distributions. To make them directly comparable, all values are normalised to the interval [0, 1] using scales::rescale().\n\nveloland_edges_c &lt;- veloland_edges_c %&gt;%\n  mutate(\n    degree_norm      = scales::rescale(degree),\n    closeness_norm   = scales::rescale(closeness),\n    betweenness_norm = scales::rescale(betweenness)\n  )\n\n\nmake_map &lt;- function(data, fill_var, title, orte) {\n  ggplot() +\n    geom_sf(data = data, aes(color = .data[[fill_var]]), linewidth = 0.3) +\n    scale_color_viridis_c(\n      option = \"plasma\",\n      name   = \"norm. value\\n[0 – 1]\",\n      limits = c(0, 1),\n      guide  = guide_colorbar(barwidth = 0.5, barheight = 5)\n    ) +\n    geom_sf(data = orte, shape = 21, fill = \"white\", color = \"black\",\n            size = 1.8, stroke = 0.5) +\n    geom_sf_text(data = orte, aes(label = Ortschaft),\n                 size = 2.4, fontface = \"bold\", vjust = -0.8, color = \"black\") +\n    labs(title = title) +\n    theme_void(base_size = 9) +\n    theme(\n      plot.title      = element_text(size = 10, face = \"bold\",\n                                     hjust = 0.5, margin = margin(b = 4)),\n      legend.position = \"right\"\n    )\n}\n\np_degree      &lt;- make_map(veloland_edges_c, \"degree_norm\",      \"degree\",      orte)\np_closeness   &lt;- make_map(veloland_edges_c, \"closeness_norm\",   \"closeness\",   orte)\np_betweenness &lt;- make_map(veloland_edges_c, \"betweenness_norm\", \"betweenness\", orte)\n\n(p_degree | p_closeness | p_betweenness) +\n  plot_annotation(\n    title   = \"Centrality measures – Swiss cycle network (Veloland)\",\n    caption = \"Data: ASTRA/FEDRO  |  CRS: EPSG:2056  |  Weights: edge length [m]\",\n    theme   = theme(\n      plot.title          = element_text(size = 12, face = \"bold\", hjust = 0.5),\n      plot.title.position = \"plot\",\n      plot.caption        = element_text(size = 7.5, color = \"grey50\", hjust = 1)\n    )\n  )\n\n\n\n\nFigure 1: Centrality measures for the Swiss cycle network (Veloland). All values normalised to [0, 1]. Red/yellow = high, purple = low.\n\n\n\n\n\n\n\nDegree (left): Almost the entire network shows similarly high degree values (orange/yellow). Slightly higher values appear in the Mittelland between Basel, Zürich and Bern, where many routes intersect and nodes have more direct connections. Peripheral areas such as Ticino (Chiasso) or Graubünden (Chur, Mals) show lower values because the network is sparser there.\nCloseness (centre): The spatial gradient is most clearly visible here: the Mittelland is bright (high closeness) while the periphery remains dark. The Zürich/Bern/Basel region has the highest values. From there, all other nodes in the network can be reached via short total distances. Ticino, Geneva and Graubünden are peripheral and poorly connected, which reflects the Alpine topography: long detours through valleys strongly increase network distances.\nBetweenness (right): This is the most informative map: almost the entire network is dark (close to 0), but a few edges light up brightly. These bright edges are the critical bottlenecks of the network, connections through which a particularly large number of shortest paths pass. The main axes are clearly visible: the Rhône valley (towards Geneva), the Rhine valley (towards Mals/Chur) and the east-west axis through the Mittelland. If one of these edges were removed, the network would become strongly fragmented.\nConclusion: The three measures capture different aspects of centrality. Degree reflects local connectivity, closeness indicates geographical position within the overall network, and betweenness identifies infrastructurally critical connections, which is particularly relevant for network planning and resilience analysis."
+  },
+  {
+    "objectID": "network_analysis.html#step-1-load-libraries",
+    "href": "network_analysis.html#step-1-load-libraries",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "library(sf)\nlibrary(sfnetworks)\nlibrary(tidygraph)\nlibrary(dplyr)\nlibrary(ggplot2)\nlibrary(patchwork)\nlibrary(scales)"
+  },
+  {
+    "objectID": "network_analysis.html#step-2-load-the-data",
+    "href": "network_analysis.html#step-2-load-the-data",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "Both layers are loaded as sf objects. The Veloland network is already in the Swiss national projection EPSG:2056 (CH1903+ / LV95), so no reprojection is needed. The length column already contains the edge length in metres.\n\npfad &lt;- \"C:/Users/Lejlum/network_analysis\"\n\nveloland_lines &lt;- st_read(file.path(pfad, \"veloland.gpkg\"), quiet = TRUE)\norte           &lt;- st_read(file.path(pfad, \"locations.gpkg\"), quiet = TRUE)"
+  },
+  {
+    "objectID": "network_analysis.html#step-3-convert-to-an-undirected-network",
+    "href": "network_analysis.html#step-3-convert-to-an-undirected-network",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The sf line layer is converted to an undirected sfnetwork object. An undirected network is appropriate here because cycling routes can be traversed in both directions.\n\nnet &lt;- as_sfnetwork(veloland_lines, directed = FALSE)"
+  },
+  {
+    "objectID": "network_analysis.html#step-4-compute-centrality-measures",
+    "href": "network_analysis.html#step-4-compute-centrality-measures",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The nodes are activated and three new columns are created using dplyr::mutate(). Edge length is used as the weight for closeness and betweenness, so that longer edges are treated as more costly to traverse.\n\nnet_c &lt;- net %&gt;%\n  activate(nodes) %&gt;%\n  mutate(\n    degree      = centrality_degree(),\n    closeness   = centrality_closeness(weights = length),\n    betweenness = centrality_betweenness(weights = length)\n  )"
+  },
+  {
+    "objectID": "network_analysis.html#step-5-convert-back-to-sf-objects",
+    "href": "network_analysis.html#step-5-convert-back-to-sf-objects",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "Both the enriched nodes and the edges are extracted as sf objects.\n\nveloland_nodes &lt;- net_c %&gt;% activate(nodes) %&gt;% st_as_sf()\nveloland_edges &lt;- net_c %&gt;% activate(edges) %&gt;% st_as_sf()"
+  },
+  {
+    "objectID": "network_analysis.html#step-6-transfer-centrality-values-to-edges",
+    "href": "network_analysis.html#step-6-transfer-centrality-values-to-edges",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The centrality values are attached to the nodes. aggregate() transfers them to the edges by computing the mean over all nodes for each edge.\n\nveloland_edges_c &lt;- aggregate(veloland_nodes, veloland_edges, FUN = \"mean\")"
+  },
+  {
+    "objectID": "network_analysis.html#step-7-normalise-values-and-visualise",
+    "href": "network_analysis.html#step-7-normalise-values-and-visualise",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The three measures have very different scales and distributions. To make them directly comparable, all values are normalised to the interval [0, 1] using scales::rescale().\n\nveloland_edges_c &lt;- veloland_edges_c %&gt;%\n  mutate(\n    degree_norm      = scales::rescale(degree),\n    closeness_norm   = scales::rescale(closeness),\n    betweenness_norm = scales::rescale(betweenness)\n  )\n\n\nmake_map &lt;- function(data, fill_var, title, orte) {\n  ggplot() +\n    geom_sf(data = data, aes(color = .data[[fill_var]]), linewidth = 0.3) +\n    scale_color_viridis_c(\n      option = \"plasma\",\n      name   = \"norm. value\\n[0 – 1]\",\n      limits = c(0, 1),\n      guide  = guide_colorbar(barwidth = 0.5, barheight = 5)\n    ) +\n    geom_sf(data = orte, shape = 21, fill = \"white\", color = \"black\",\n            size = 1.8, stroke = 0.5) +\n    geom_sf_text(data = orte, aes(label = Ortschaft),\n                 size = 2.4, fontface = \"bold\", vjust = -0.8, color = \"black\") +\n    labs(title = title) +\n    theme_void(base_size = 9) +\n    theme(\n      plot.title      = element_text(size = 10, face = \"bold\",\n                                     hjust = 0.5, margin = margin(b = 4)),\n      legend.position = \"right\"\n    )\n}\n\np_degree      &lt;- make_map(veloland_edges_c, \"degree_norm\",      \"degree\",      orte)\np_closeness   &lt;- make_map(veloland_edges_c, \"closeness_norm\",   \"closeness\",   orte)\np_betweenness &lt;- make_map(veloland_edges_c, \"betweenness_norm\", \"betweenness\", orte)\n\n(p_degree | p_closeness | p_betweenness) +\n  plot_annotation(\n    title   = \"Centrality measures – Swiss cycle network (Veloland)\",\n    caption = \"Data: ASTRA/FEDRO  |  CRS: EPSG:2056  |  Weights: edge length [m]\",\n    theme   = theme(\n      plot.title          = element_text(size = 12, face = \"bold\", hjust = 0.5),\n      plot.title.position = \"plot\",\n      plot.caption        = element_text(size = 7.5, color = \"grey50\", hjust = 1)\n    )\n  )\n\n\n\n\nFigure 1: Centrality measures for the Swiss cycle network (Veloland). All values normalised to [0, 1]. Red/yellow = high, purple = low."
+  },
+  {
+    "objectID": "network_analysis.html#step-8-discussion",
+    "href": "network_analysis.html#step-8-discussion",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "Degree (left): Almost the entire network shows similarly high degree values (orange/yellow). Slightly higher values appear in the Mittelland between Basel, Zürich and Bern, where many routes intersect and nodes have more direct connections. Peripheral areas such as Ticino (Chiasso) or Graubünden (Chur, Mals) show lower values because the network is sparser there.\nCloseness (centre): The spatial gradient is most clearly visible here: the Mittelland is bright (high closeness) while the periphery remains dark. The Zürich/Bern/Basel region has the highest values. From there, all other nodes in the network can be reached via short total distances. Ticino, Geneva and Graubünden are peripheral and poorly connected, which reflects the Alpine topography: long detours through valleys strongly increase network distances.\nBetweenness (right): This is the most informative map: almost the entire network is dark (close to 0), but a few edges light up brightly. These bright edges are the critical bottlenecks of the network, connections through which a particularly large number of shortest paths pass. The main axes are clearly visible: the Rhône valley (towards Geneva), the Rhine valley (towards Mals/Chur) and the east-west axis through the Mittelland. If one of these edges were removed, the network would become strongly fragmented.\nConclusion: The three measures capture different aspects of centrality. Degree reflects local connectivity, closeness indicates geographical position within the overall network, and betweenness identifies infrastructurally critical connections, which is particularly relevant for network planning and resilience analysis."
+  },
+  {
+    "objectID": "network_analysis.html#step-1-load-libraries-and-data",
+    "href": "network_analysis.html#step-1-load-libraries-and-data",
+    "title": "Network Analysis",
+    "section": "Step 1: Load libraries and data",
+    "text": "Step 1: Load libraries and data\n\nlibrary(sf)\nlibrary(sfnetworks)\nlibrary(dplyr)\nlibrary(ggplot2)\n\n\nveloland_lines &lt;- st_read(file.path(pfad, \"veloland.gpkg\"), quiet = TRUE)\norte           &lt;- st_read(file.path(pfad, \"locations.gpkg\"), quiet = TRUE)\n\nnet &lt;- as_sfnetwork(veloland_lines, directed = FALSE)"
+  },
+  {
+    "objectID": "network_analysis.html#step-2-define-origin-and-destination",
+    "href": "network_analysis.html#step-2-define-origin-and-destination",
+    "title": "Network Analysis",
+    "section": "Step 2: Define origin and destination",
+    "text": "Step 2: Define origin and destination\nThe first location (Chiasso) is selected as the origin. All other locations serve as destinations.\n\norte$Ortschaft  # available cities\n\n[1] \"Chiasso\"  \"Genf\"     \"Lausanne\" \"Bern\"     \"Basel\"    \"Zürich\"   \"Chur\"    \n[8] \"Mals\"    \n\norigin      &lt;- orte[1, ]   # Chiasso\ndestination &lt;- orte[-1, ]  # all other 7 cities"
+  },
+  {
+    "objectID": "network_analysis.html#step-3-calculate-shortest-paths",
+    "href": "network_analysis.html#step-3-calculate-shortest-paths",
+    "title": "Network Analysis",
+    "section": "Step 3: Calculate shortest paths",
+    "text": "Step 3: Calculate shortest paths\nst_network_paths() computes the shortest path from the origin to each destination, weighted by edge length.\n\npaths &lt;- st_network_paths(\n  net,\n  from    = origin,\n  to      = destination,\n  weights = \"length\"\n)\n\npaths\n\n# A tibble: 7 × 2\n  node_paths edge_paths\n  &lt;list&gt;     &lt;list&gt;    \n1 &lt;int [68]&gt; &lt;int [67]&gt;\n2 &lt;int [77]&gt; &lt;int [76]&gt;\n3 &lt;int [56]&gt; &lt;int [55]&gt;\n4 &lt;int [86]&gt; &lt;int [85]&gt;\n5 &lt;int [56]&gt; &lt;int [55]&gt;\n6 &lt;int [25]&gt; &lt;int [24]&gt;\n7 &lt;int [30]&gt; &lt;int [29]&gt;\n\n\nThe result is a tibble with two list columns: node_paths (node indices) and edge_paths (edge indices). The edge_paths column is used in the next step to reconstruct the geometry of each path."
+  },
+  {
+    "objectID": "network_analysis.html#step-4-create-sf-objects-for-each-path",
+    "href": "network_analysis.html#step-4-create-sf-objects-for-each-path",
+    "title": "Network Analysis",
+    "section": "Step 4: Create sf objects for each path",
+    "text": "Step 4: Create sf objects for each path\nThe edges of the network are extracted as an sf object. For each path, the corresponding edges are filtered using the indices from edge_paths and combined with a destination label.\n\nnet_edges &lt;- net %&gt;% activate(edges) %&gt;% st_as_sf()\n\npath_lines &lt;- lapply(seq_len(nrow(paths)), function(i) {\n  edge_ids &lt;- paths$edge_paths[[i]]\n  segment  &lt;- net_edges[edge_ids, ]\n  segment$destination &lt;- destination$Ortschaft[i]\n  segment\n})\n\nall_paths &lt;- do.call(rbind, path_lines)"
+  },
+  {
+    "objectID": "network_analysis.html#step-5-visualise",
+    "href": "network_analysis.html#step-5-visualise",
+    "title": "Network Analysis",
+    "section": "Step 5: Visualise",
+    "text": "Step 5: Visualise\n\nggplot() +\n  geom_sf(data = net_edges,\n          color = \"grey80\", linewidth = 0.2) +\n  geom_sf(data = all_paths,\n          aes(color = destination), linewidth = 0.8) +\n  geom_sf(data = destination,\n          shape = 21, fill = \"white\", color = \"black\",\n          size = 2.5, stroke = 0.7) +\n  geom_sf(data = origin,\n          shape = 23, fill = \"red\", color = \"black\",\n          size = 3.5, stroke = 0.7) +\n  geom_sf_text(data = destination,\n               aes(label = Ortschaft),\n               size = 2.6, fontface = \"bold\",\n               vjust = -0.9, color = \"black\") +\n  geom_sf_text(data = origin,\n               aes(label = Ortschaft),\n               size = 2.6, fontface = \"bold\",\n               vjust = -0.9, color = \"red\") +\n  scale_color_brewer(palette = \"Dark2\", name = \"Destination\") +\n  labs(\n    title   = paste0(\"Shortest paths from \", origin$Ortschaft,\n                     \" to all other locations\"),\n    caption = \"Data: ASTRA/FEDRO  |  CRS: EPSG:2056  |  Weights: edge length [m]\"\n  ) +\n  theme_void(base_size = 10) +\n  theme(\n    plot.title   = element_text(size = 12, face = \"bold\",\n                                hjust = 0.5, margin = margin(b = 6)),\n    plot.caption = element_text(size = 7.5, color = \"grey50\", hjust = 1),\n    legend.position = \"right\"\n  )\n\n\n\n\nFigure 2: Shortest paths from Chiasso (red diamond) to all other locations. Each path is shown in a distinct colour. The grey background shows the full Veloland network."
+  },
+  {
+    "objectID": "network_analysis.html#discussion",
+    "href": "network_analysis.html#discussion",
+    "title": "Network Analysis",
+    "section": "Discussion",
+    "text": "Discussion\nAlmost all paths from Chiasso converge at the Gotthard corridor, the only crossing point from Ticino northward through the Alps. This confirms the high betweenness values found for that section in Task 1.\nThe path to Chur is the shortest (24 edges), as the route follows the Rhine valley directly. The path to Geneva is the longest (76 edges), crossing the full width of Switzerland. The paths to Bern and Lausanne share many segments since they initially follow the same direction northward before diverging.\nThese results illustrate how Alpine topography strongly constrains routing in the Swiss cycle network: detours through valleys make distances much longer than straight-line distances would suggest, and a small number of mountain crossings act as unavoidable chokepoints for nearly all long-distance routes."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "In this task, the cycle network of Switzerland is analysed using R. The dataset comes from the Federal Roads Office FEDRO (ASTRA). The goal is to compute three different centrality measures (degree, closeness, and betweenness) for the nodes in the network and visualise the results.\n\n\n\nlibrary(sf)\nlibrary(sfnetworks)\nlibrary(tidygraph)\nlibrary(dplyr)\nlibrary(ggplot2)\nlibrary(patchwork)\nlibrary(scales)\n\n\n\n\nBoth layers are loaded as sf objects. The Veloland network is already in the Swiss national projection EPSG:2056 (CH1903+ / LV95), so no reprojection is needed. The length column already contains the edge length in metres.\n\npfad &lt;- \"C:/Users/Lejlum/network_analysis\"\n\nveloland_lines &lt;- st_read(file.path(pfad, \"veloland.gpkg\"), quiet = TRUE)\norte           &lt;- st_read(file.path(pfad, \"locations.gpkg\"), quiet = TRUE)\n\n\n\n\nThe sf line layer is converted to an undirected sfnetwork object. An undirected network is appropriate here because cycling routes can be traversed in both directions.\n\nnet &lt;- as_sfnetwork(veloland_lines, directed = FALSE)\n\n\n\n\nThe nodes are activated and three new columns are created using dplyr::mutate(). Edge length is used as the weight for closeness and betweenness, so that longer edges are treated as more costly to traverse.\n\nnet_c &lt;- net %&gt;%\n  activate(nodes) %&gt;%\n  mutate(\n    degree      = centrality_degree(),\n    closeness   = centrality_closeness(weights = length),\n    betweenness = centrality_betweenness(weights = length)\n  )\n\n\n\n\nBoth the enriched nodes and the edges are extracted as sf objects.\n\nveloland_nodes &lt;- net_c %&gt;% activate(nodes) %&gt;% st_as_sf()\nveloland_edges &lt;- net_c %&gt;% activate(edges) %&gt;% st_as_sf()\n\n\n\n\nThe centrality values are attached to the nodes. aggregate() transfers them to the edges by computing the mean over all nodes for each edge.\n\nveloland_edges_c &lt;- aggregate(veloland_nodes, veloland_edges, FUN = \"mean\")\n\n\n\n\nThe three measures have very different scales and distributions. To make them directly comparable, all values are normalised to the interval [0, 1] using scales::rescale().\n\nveloland_edges_c &lt;- veloland_edges_c %&gt;%\n  mutate(\n    degree_norm      = scales::rescale(degree),\n    closeness_norm   = scales::rescale(closeness),\n    betweenness_norm = scales::rescale(betweenness)\n  )\n\n\nmake_map &lt;- function(data, fill_var, title, orte) {\n  ggplot() +\n    geom_sf(data = data, aes(color = .data[[fill_var]]), linewidth = 0.3) +\n    scale_color_viridis_c(\n      option = \"plasma\",\n      name   = \"norm. value\\n[0 – 1]\",\n      limits = c(0, 1),\n      guide  = guide_colorbar(barwidth = 0.5, barheight = 5)\n    ) +\n    geom_sf(data = orte, shape = 21, fill = \"white\", color = \"black\",\n            size = 1.8, stroke = 0.5) +\n    geom_sf_text(data = orte, aes(label = Ortschaft),\n                 size = 2.4, fontface = \"bold\", vjust = -0.8, color = \"black\") +\n    labs(title = title) +\n    theme_void(base_size = 9) +\n    theme(\n      plot.title      = element_text(size = 10, face = \"bold\",\n                                     hjust = 0.5, margin = margin(b = 4)),\n      legend.position = \"right\"\n    )\n}\n\np_degree      &lt;- make_map(veloland_edges_c, \"degree_norm\",      \"degree\",      orte)\np_closeness   &lt;- make_map(veloland_edges_c, \"closeness_norm\",   \"closeness\",   orte)\np_betweenness &lt;- make_map(veloland_edges_c, \"betweenness_norm\", \"betweenness\", orte)\n\n(p_degree | p_closeness | p_betweenness) +\n  plot_annotation(\n    title   = \"Centrality measures – Swiss cycle network (Veloland)\",\n    caption = \"Data: ASTRA/FEDRO  |  CRS: EPSG:2056  |  Weights: edge length [m]\",\n    theme   = theme(\n      plot.title          = element_text(size = 12, face = \"bold\", hjust = 0.5),\n      plot.title.position = \"plot\",\n      plot.caption        = element_text(size = 7.5, color = \"grey50\", hjust = 1)\n    )\n  )\n\n\n\n\nFigure 1: Centrality measures for the Swiss cycle network (Veloland). All values normalised to [0, 1]. Red/yellow = high, purple = low.\n\n\n\n\n\n\n\nDegree (left): Almost the entire network shows similarly high degree values (orange/yellow). Slightly higher values appear in the Mittelland between Basel, Zürich and Bern, where many routes intersect and nodes have more direct connections. Peripheral areas such as Ticino (Chiasso) or Graubünden (Chur, Mals) show lower values because the network is sparser there.\nCloseness (centre): The spatial gradient is most clearly visible here: the Mittelland is bright (high closeness) while the periphery remains dark. The Zürich/Bern/Basel region has the highest values. From there, all other nodes in the network can be reached via short total distances. Ticino, Geneva and Graubünden are peripheral and poorly connected, which reflects the Alpine topography: long detours through valleys strongly increase network distances.\nBetweenness (right): This is the most informative map: almost the entire network is dark (close to 0), but a few edges light up brightly. These bright edges are the critical bottlenecks of the network, connections through which a particularly large number of shortest paths pass. The main axes are clearly visible: the Rhône valley (towards Geneva), the Rhine valley (towards Mals/Chur) and the east-west axis through the Mittelland. If one of these edges were removed, the network would become strongly fragmented.\nConclusion: The three measures capture different aspects of centrality. Degree reflects local connectivity, closeness indicates geographical position within the overall network, and betweenness identifies infrastructurally critical connections, which is particularly relevant for network planning and resilience analysis."
+  },
+  {
+    "objectID": "index.html#step-1-load-libraries",
+    "href": "index.html#step-1-load-libraries",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "library(sf)\nlibrary(sfnetworks)\nlibrary(tidygraph)\nlibrary(dplyr)\nlibrary(ggplot2)\nlibrary(patchwork)\nlibrary(scales)"
+  },
+  {
+    "objectID": "index.html#step-2-load-the-data",
+    "href": "index.html#step-2-load-the-data",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "Both layers are loaded as sf objects. The Veloland network is already in the Swiss national projection EPSG:2056 (CH1903+ / LV95), so no reprojection is needed. The length column already contains the edge length in metres.\n\npfad &lt;- \"C:/Users/Lejlum/network_analysis\"\n\nveloland_lines &lt;- st_read(file.path(pfad, \"veloland.gpkg\"), quiet = TRUE)\norte           &lt;- st_read(file.path(pfad, \"locations.gpkg\"), quiet = TRUE)"
+  },
+  {
+    "objectID": "index.html#step-3-convert-to-an-undirected-network",
+    "href": "index.html#step-3-convert-to-an-undirected-network",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The sf line layer is converted to an undirected sfnetwork object. An undirected network is appropriate here because cycling routes can be traversed in both directions.\n\nnet &lt;- as_sfnetwork(veloland_lines, directed = FALSE)"
+  },
+  {
+    "objectID": "index.html#step-4-compute-centrality-measures",
+    "href": "index.html#step-4-compute-centrality-measures",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The nodes are activated and three new columns are created using dplyr::mutate(). Edge length is used as the weight for closeness and betweenness, so that longer edges are treated as more costly to traverse.\n\nnet_c &lt;- net %&gt;%\n  activate(nodes) %&gt;%\n  mutate(\n    degree      = centrality_degree(),\n    closeness   = centrality_closeness(weights = length),\n    betweenness = centrality_betweenness(weights = length)\n  )"
+  },
+  {
+    "objectID": "index.html#step-5-convert-back-to-sf-objects",
+    "href": "index.html#step-5-convert-back-to-sf-objects",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "Both the enriched nodes and the edges are extracted as sf objects.\n\nveloland_nodes &lt;- net_c %&gt;% activate(nodes) %&gt;% st_as_sf()\nveloland_edges &lt;- net_c %&gt;% activate(edges) %&gt;% st_as_sf()"
+  },
+  {
+    "objectID": "index.html#step-6-transfer-centrality-values-to-edges",
+    "href": "index.html#step-6-transfer-centrality-values-to-edges",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The centrality values are attached to the nodes. aggregate() transfers them to the edges by computing the mean over all nodes for each edge.\n\nveloland_edges_c &lt;- aggregate(veloland_nodes, veloland_edges, FUN = \"mean\")"
+  },
+  {
+    "objectID": "index.html#step-7-normalise-values-and-visualise",
+    "href": "index.html#step-7-normalise-values-and-visualise",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "The three measures have very different scales and distributions. To make them directly comparable, all values are normalised to the interval [0, 1] using scales::rescale().\n\nveloland_edges_c &lt;- veloland_edges_c %&gt;%\n  mutate(\n    degree_norm      = scales::rescale(degree),\n    closeness_norm   = scales::rescale(closeness),\n    betweenness_norm = scales::rescale(betweenness)\n  )\n\n\nmake_map &lt;- function(data, fill_var, title, orte) {\n  ggplot() +\n    geom_sf(data = data, aes(color = .data[[fill_var]]), linewidth = 0.3) +\n    scale_color_viridis_c(\n      option = \"plasma\",\n      name   = \"norm. value\\n[0 – 1]\",\n      limits = c(0, 1),\n      guide  = guide_colorbar(barwidth = 0.5, barheight = 5)\n    ) +\n    geom_sf(data = orte, shape = 21, fill = \"white\", color = \"black\",\n            size = 1.8, stroke = 0.5) +\n    geom_sf_text(data = orte, aes(label = Ortschaft),\n                 size = 2.4, fontface = \"bold\", vjust = -0.8, color = \"black\") +\n    labs(title = title) +\n    theme_void(base_size = 9) +\n    theme(\n      plot.title      = element_text(size = 10, face = \"bold\",\n                                     hjust = 0.5, margin = margin(b = 4)),\n      legend.position = \"right\"\n    )\n}\n\np_degree      &lt;- make_map(veloland_edges_c, \"degree_norm\",      \"degree\",      orte)\np_closeness   &lt;- make_map(veloland_edges_c, \"closeness_norm\",   \"closeness\",   orte)\np_betweenness &lt;- make_map(veloland_edges_c, \"betweenness_norm\", \"betweenness\", orte)\n\n(p_degree | p_closeness | p_betweenness) +\n  plot_annotation(\n    title   = \"Centrality measures – Swiss cycle network (Veloland)\",\n    caption = \"Data: ASTRA/FEDRO  |  CRS: EPSG:2056  |  Weights: edge length [m]\",\n    theme   = theme(\n      plot.title          = element_text(size = 12, face = \"bold\", hjust = 0.5),\n      plot.title.position = \"plot\",\n      plot.caption        = element_text(size = 7.5, color = \"grey50\", hjust = 1)\n    )\n  )\n\n\n\n\nFigure 1: Centrality measures for the Swiss cycle network (Veloland). All values normalised to [0, 1]. Red/yellow = high, purple = low."
+  },
+  {
+    "objectID": "index.html#step-8-discussion",
+    "href": "index.html#step-8-discussion",
+    "title": "Network Analysis",
+    "section": "",
+    "text": "Degree (left): Almost the entire network shows similarly high degree values (orange/yellow). Slightly higher values appear in the Mittelland between Basel, Zürich and Bern, where many routes intersect and nodes have more direct connections. Peripheral areas such as Ticino (Chiasso) or Graubünden (Chur, Mals) show lower values because the network is sparser there.\nCloseness (centre): The spatial gradient is most clearly visible here: the Mittelland is bright (high closeness) while the periphery remains dark. The Zürich/Bern/Basel region has the highest values. From there, all other nodes in the network can be reached via short total distances. Ticino, Geneva and Graubünden are peripheral and poorly connected, which reflects the Alpine topography: long detours through valleys strongly increase network distances.\nBetweenness (right): This is the most informative map: almost the entire network is dark (close to 0), but a few edges light up brightly. These bright edges are the critical bottlenecks of the network, connections through which a particularly large number of shortest paths pass. The main axes are clearly visible: the Rhône valley (towards Geneva), the Rhine valley (towards Mals/Chur) and the east-west axis through the Mittelland. If one of these edges were removed, the network would become strongly fragmented.\nConclusion: The three measures capture different aspects of centrality. Degree reflects local connectivity, closeness indicates geographical position within the overall network, and betweenness identifies infrastructurally critical connections, which is particularly relevant for network planning and resilience analysis."
+  },
+  {
+    "objectID": "index.html#step-1-load-libraries-and-data",
+    "href": "index.html#step-1-load-libraries-and-data",
+    "title": "Network Analysis",
+    "section": "Step 1: Load libraries and data",
+    "text": "Step 1: Load libraries and data\n\nlibrary(sf)\nlibrary(sfnetworks)\nlibrary(dplyr)\nlibrary(ggplot2)\n\n\nveloland_lines &lt;- st_read(file.path(pfad, \"veloland.gpkg\"), quiet = TRUE)\norte           &lt;- st_read(file.path(pfad, \"locations.gpkg\"), quiet = TRUE)\n\nnet &lt;- as_sfnetwork(veloland_lines, directed = FALSE)"
+  },
+  {
+    "objectID": "index.html#step-2-define-origin-and-destination",
+    "href": "index.html#step-2-define-origin-and-destination",
+    "title": "Network Analysis",
+    "section": "Step 2: Define origin and destination",
+    "text": "Step 2: Define origin and destination\nThe first location (Chiasso) is selected as the origin. All other locations serve as destinations.\n\norte$Ortschaft  # available cities\n\n[1] \"Chiasso\"  \"Genf\"     \"Lausanne\" \"Bern\"     \"Basel\"    \"Zürich\"   \"Chur\"    \n[8] \"Mals\"    \n\norigin      &lt;- orte[1, ]   # Chiasso\ndestination &lt;- orte[-1, ]  # all other 7 cities"
+  },
+  {
+    "objectID": "index.html#step-3-calculate-shortest-paths",
+    "href": "index.html#step-3-calculate-shortest-paths",
+    "title": "Network Analysis",
+    "section": "Step 3: Calculate shortest paths",
+    "text": "Step 3: Calculate shortest paths\nst_network_paths() computes the shortest path from the origin to each destination, weighted by edge length.\n\npaths &lt;- st_network_paths(\n  net,\n  from    = origin,\n  to      = destination,\n  weights = \"length\"\n)\n\npaths\n\n# A tibble: 7 × 2\n  node_paths edge_paths\n  &lt;list&gt;     &lt;list&gt;    \n1 &lt;int [68]&gt; &lt;int [67]&gt;\n2 &lt;int [77]&gt; &lt;int [76]&gt;\n3 &lt;int [56]&gt; &lt;int [55]&gt;\n4 &lt;int [86]&gt; &lt;int [85]&gt;\n5 &lt;int [56]&gt; &lt;int [55]&gt;\n6 &lt;int [25]&gt; &lt;int [24]&gt;\n7 &lt;int [30]&gt; &lt;int [29]&gt;\n\n\nThe result is a tibble with two list columns: node_paths (node indices) and edge_paths (edge indices). The edge_paths column is used in the next step to reconstruct the geometry of each path."
+  },
+  {
+    "objectID": "index.html#step-4-create-sf-objects-for-each-path",
+    "href": "index.html#step-4-create-sf-objects-for-each-path",
+    "title": "Network Analysis",
+    "section": "Step 4: Create sf objects for each path",
+    "text": "Step 4: Create sf objects for each path\nThe edges of the network are extracted as an sf object. For each path, the corresponding edges are filtered using the indices from edge_paths and combined with a destination label.\n\nnet_edges &lt;- net %&gt;% activate(edges) %&gt;% st_as_sf()\n\npath_lines &lt;- lapply(seq_len(nrow(paths)), function(i) {\n  edge_ids &lt;- paths$edge_paths[[i]]\n  segment  &lt;- net_edges[edge_ids, ]\n  segment$destination &lt;- destination$Ortschaft[i]\n  segment\n})\n\nall_paths &lt;- do.call(rbind, path_lines)"
+  },
+  {
+    "objectID": "index.html#step-5-visualise",
+    "href": "index.html#step-5-visualise",
+    "title": "Network Analysis",
+    "section": "Step 5: Visualise",
+    "text": "Step 5: Visualise\n\nggplot() +\n  geom_sf(data = net_edges,\n          color = \"grey80\", linewidth = 0.2) +\n  geom_sf(data = all_paths,\n          aes(color = destination), linewidth = 0.8) +\n  geom_sf(data = destination,\n          shape = 21, fill = \"white\", color = \"black\",\n          size = 2.5, stroke = 0.7) +\n  geom_sf(data = origin,\n          shape = 23, fill = \"red\", color = \"black\",\n          size = 3.5, stroke = 0.7) +\n  geom_sf_text(data = destination,\n               aes(label = Ortschaft),\n               size = 2.6, fontface = \"bold\",\n               vjust = -0.9, color = \"black\") +\n  geom_sf_text(data = origin,\n               aes(label = Ortschaft),\n               size = 2.6, fontface = \"bold\",\n               vjust = -0.9, color = \"red\") +\n  scale_color_brewer(palette = \"Dark2\", name = \"Destination\") +\n  labs(\n    title   = paste0(\"Shortest paths from \", origin$Ortschaft,\n                     \" to all other locations\"),\n    caption = \"Data: ASTRA/FEDRO  |  CRS: EPSG:2056  |  Weights: edge length [m]\"\n  ) +\n  theme_void(base_size = 10) +\n  theme(\n    plot.title   = element_text(size = 12, face = \"bold\",\n                                hjust = 0.5, margin = margin(b = 6)),\n    plot.caption = element_text(size = 7.5, color = \"grey50\", hjust = 1),\n    legend.position = \"right\"\n  )\n\n\n\n\nFigure 2: Shortest paths from Chiasso (red diamond) to all other locations. Each path is shown in a distinct colour. The grey background shows the full Veloland network."
+  },
+  {
+    "objectID": "index.html#discussion",
+    "href": "index.html#discussion",
+    "title": "Network Analysis",
+    "section": "Discussion",
+    "text": "Discussion\nAlmost all paths from Chiasso converge at the Gotthard corridor, the only crossing point from Ticino northward through the Alps. This confirms the high betweenness values found for that section in Task 1.\nThe path to Chur is the shortest (24 edges), as the route follows the Rhine valley directly. The path to Geneva is the longest (76 edges), crossing the full width of Switzerland. The paths to Bern and Lausanne share many segments since they initially follow the same direction northward before diverging.\nThese results illustrate how Alpine topography strongly constrains routing in the Swiss cycle network: detours through valleys make distances much longer than straight-line distances would suggest, and a small number of mountain crossings act as unavoidable chokepoints for nearly all long-distance routes."
+  }
+]
