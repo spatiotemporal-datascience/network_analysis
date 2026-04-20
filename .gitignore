@@ -1,3 +1,9 @@
 /.quarto/
 **/*.quarto_ipynb
 .Rproj.user
+.RDataTmp
+.Rhistory
+*.Rproj
+*.gpkg
+centrality_veloland.png
+routing_veloland.png
